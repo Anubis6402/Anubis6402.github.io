@@ -42,7 +42,7 @@
         gap: 12px;
     ">
         <button id="closePanel" style="position: absolute; top: 10px; right: 10px;">✕</button>
-        <button id="manageRoutes" style="display: block; margin-bottom: 10px;">Manage Routes</button>
+        <button id="manageRoutes" style="display: block; margin-bottom: 10px;">Add Route</button>
         <!-- Add more panel content here -->
     </div>
 
@@ -57,6 +57,7 @@
 
         let isEditMode = false;
         let currentEditingRoute = null;
+        let allRoutesData = JSON.parse(localStorage.getItem('routesData')) || {};
         // Store per-route markers
         const routeMarkers = {};
 
@@ -76,6 +77,13 @@
         document.getElementById('manageRoutes').addEventListener('click', function () {
             const routeName = prompt("Enter the route name:");
             if (routeName) {
+                // Add to allRoutesData and persist
+                allRoutesData[routeName] = {
+                    points: [],
+                    color: '#888'
+                };
+                localStorage.setItem('routesData', JSON.stringify(allRoutesData));
+
                 const routeItem = document.createElement('div');
                 routeItem.style.display = 'flex';
                 routeItem.style.justifyContent = 'space-between';
@@ -105,6 +113,9 @@
                             routeMarkers[routeName].forEach(marker => marker.remove());
                             delete routeMarkers[routeName];
                         }
+                        // Remove from allRoutesData and persist
+                        delete allRoutesData[routeName];
+                        localStorage.setItem('routesData', JSON.stringify(allRoutesData));
                     }
                 });
 
@@ -334,6 +345,12 @@
                                         map.getSource(routeSourceId).setData(data);
                                     }
                                     points.push(newPoint);
+                                    // Update allRoutesData and persist
+                                    allRoutesData[routeName] = {
+                                        points,
+                                        color: map.getPaintProperty(`routeLine-${routeName}`, 'line-color') || '#888'
+                                    };
+                                    localStorage.setItem('routesData', JSON.stringify(allRoutesData));
                                 };
 
                                 map.on('click', clickHandler);
@@ -366,6 +383,326 @@
                     }
                 });
             }
+        });
+        // Restore routes from localStorage at start
+        map.on('load', function () {
+            Object.entries(allRoutesData).forEach(([name, data]) => {
+                // Recreate source
+                map.addSource(`routeLine-${name}`, {
+                    type: 'geojson',
+                    data: {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: data.points
+                        }
+                    }
+                });
+                map.addLayer({
+                    id: `routeLine-${name}`,
+                    type: 'line',
+                    source: `routeLine-${name}`,
+                    layout: {},
+                    paint: {
+                        'line-color': data.color || '#888',
+                        'line-width': 4
+                    }
+                });
+
+                // Recreate markers
+                routeMarkers[name] = [];
+                data.points.forEach(coord => {
+                    const marker = new mapboxgl.Marker()
+                        .setLngLat(coord)
+                        .addTo(map);
+                    marker.getElement().style.display = 'none';
+                    routeMarkers[name].push(marker);
+                });
+
+                // Recreate route list UI
+                const routeItem = document.createElement('div');
+                routeItem.style.display = 'flex';
+                routeItem.style.justifyContent = 'space-between';
+                routeItem.style.alignItems = 'center';
+                routeItem.style.marginTop = '10px';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = name;
+
+                const buttonGroup = document.createElement('div');
+
+                const editButton = document.createElement('button');
+                editButton.textContent = 'Edit';
+                editButton.style.marginRight = '5px';
+
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Delete';
+
+                deleteButton.addEventListener('click', function () {
+                    if (confirm(`Are you sure you want to delete the route "${name}"?`)) {
+                        routeItem.remove();
+                        const routeSourceId = `routeLine-${name}`;
+                        if (map.getLayer(routeSourceId)) map.removeLayer(routeSourceId);
+                        if (map.getSource(routeSourceId)) map.removeSource(routeSourceId);
+                        if (typeof routeMarkers !== 'undefined' && routeMarkers[name]) {
+                            routeMarkers[name].forEach(marker => marker.remove());
+                            delete routeMarkers[name];
+                        }
+                        // Remove from allRoutesData and persist
+                        delete allRoutesData[name];
+                        localStorage.setItem('routesData', JSON.stringify(allRoutesData));
+                    }
+                });
+
+                buttonGroup.appendChild(editButton);
+                buttonGroup.appendChild(deleteButton);
+                routeItem.appendChild(nameSpan);
+                routeItem.appendChild(buttonGroup);
+                document.getElementById('sidePanel').appendChild(routeItem);
+
+                // Reattach edit functionality (reuse existing code or functionize)
+                editButton.addEventListener('click', function () {
+                    if (currentEditingRoute && currentEditingRoute !== name) {
+                        alert(`You are already editing "${currentEditingRoute}". Finish that first.`);
+                        return;
+                    }
+                    currentEditingRoute = name;
+
+                    let routeSourceId = `routeLine-${name}`;
+                    // Source and layer should already exist
+
+                    // At the start of edit, show only this route's markers
+                    Object.entries(routeMarkers).forEach(([n, mList]) => {
+                        mList.forEach(m => m.getElement().style.display = n === name ? 'block' : 'none');
+                    });
+
+                    let editWindow = document.getElementById('editWindow');
+                    if (!editWindow) {
+                        editWindow = document.createElement('div');
+                        editWindow.id = 'editWindow';
+                        editWindow.style.cssText = `
+                            position: fixed;
+                            top: 10px;
+                            right: 10px;
+                            background-color: #ffffff;
+                            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                            padding: 8px 12px;
+                            border-radius: 8px;
+                            display: flex;
+                            gap: 10px;
+                            z-index: 10;
+                            border: 1px solid #ccc;
+                        `;
+
+                        const addPointButton = document.createElement('button');
+                        addPointButton.textContent = 'Add Point';
+                        addPointButton.id = 'addPointButton';
+                        editWindow.appendChild(addPointButton);
+
+                        // Insert Undo button between addPointButton and doneButton
+                        const undoButton = document.createElement('button');
+                        undoButton.innerHTML = '↩️';
+                        undoButton.id = 'undoButton';
+
+                        const doneButton = document.createElement('button');
+                        doneButton.textContent = 'Done';
+                        doneButton.id = 'doneButton';
+                        doneButton.style.marginLeft = '10px';
+
+                        // Insert undoButton before doneButton
+                        editWindow.appendChild(undoButton);
+                        editWindow.appendChild(doneButton);
+
+                        // Insert Color button after doneButton
+                        const colorButton = document.createElement('button');
+                        colorButton.textContent = 'Color';
+                        colorButton.id = 'colorButton';
+                        editWindow.appendChild(colorButton);
+
+                        [addPointButton, undoButton, doneButton, colorButton].forEach(btn => {
+                            btn.style.padding = '8px 12px';
+                            btn.style.fontSize = '14px';
+                            btn.style.borderRadius = '6px';
+                            btn.style.border = '1px solid #ccc';
+                            btn.style.background = '#fff';
+                            btn.style.cursor = 'pointer';
+                        });
+                        // Undo button click handler
+                        undoButton.addEventListener('click', function () {
+                            if (points.length > 0 && routeMarkers[name].length > 0) {
+                                points.pop();
+                                const removedMarker = routeMarkers[name].pop();
+                                removedMarker.remove();
+                                const source = map.getSource(routeSourceId);
+                                if (source) {
+                                    const updated = {
+                                        type: 'Feature',
+                                        geometry: {
+                                            type: 'LineString',
+                                            coordinates: [...points]
+                                        }
+                                    };
+                                    source.setData(updated);
+                                }
+                                // Update allRoutesData and persist
+                                allRoutesData[name] = {
+                                    points,
+                                    color: map.getPaintProperty(`routeLine-${name}`, 'line-color') || '#888'
+                                };
+                                localStorage.setItem('routesData', JSON.stringify(allRoutesData));
+                            }
+                        });
+                        // Color button click handler
+                        colorButton.addEventListener('click', function () {
+                            const colors = {
+                                Forest: '#154734',
+                                Miner: '#007A33',
+                                Lima: '#7FB844',
+                                Kiwi: '#BFD730',
+                                Mist: '#B1E4F3',
+                                Scooter: '#20CCC3',
+                                Lagoon: '#0085BA',
+                                Orient: '#005F83',
+                                Cyprus: '#003B49',
+                                Shuttle: '#63666A',
+                                Petra: '#A4A1A9',
+                                Pebble: '#D6D2C4',
+                                Vegas: '#CEB888',
+                                Candle: '#FDD023',
+                                Tango: '#E7772E',
+                                Ruby: '#AD2227',
+                                Amethyst: '#403A60',
+                                Gold: '#D9AB2B',
+                                Silver: '#B3B4B2'
+                            };
+
+                            const colorPicker = document.createElement('div');
+                            colorPicker.style.position = 'fixed';
+                            colorPicker.style.top = '60px';
+                            colorPicker.style.right = '10px';
+                            colorPicker.style.background = '#fff';
+                            colorPicker.style.border = '1px solid #ccc';
+                            colorPicker.style.padding = '10px';
+                            colorPicker.style.display = 'grid';
+                            colorPicker.style.gridTemplateColumns = 'repeat(4, 40px)';
+                            colorPicker.style.gap = '8px';
+                            colorPicker.style.zIndex = '11';
+
+                            Object.entries(colors).forEach(([cname, hex]) => {
+                                const colorBox = document.createElement('div');
+                                colorBox.style.background = hex;
+                                colorBox.style.width = '40px';
+                                colorBox.style.height = '40px';
+                                colorBox.style.cursor = 'pointer';
+                                colorBox.title = cname;
+                                colorBox.addEventListener('click', function () {
+                                    // Update route line color
+                                    map.setPaintProperty(`routeLine-${name}`, 'line-color', hex);
+                                    // Update marker color
+                                    markers.forEach(m => {
+                                        m.getElement().style.backgroundColor = hex;
+                                    });
+                                    colorPicker.remove();
+                                    // Update allRoutesData and persist
+                                    allRoutesData[name] = {
+                                        points,
+                                        color: hex
+                                    };
+                                    localStorage.setItem('routesData', JSON.stringify(allRoutesData));
+                                });
+                                colorPicker.appendChild(colorBox);
+                            });
+
+                            document.body.appendChild(colorPicker);
+                        });
+
+                        document.body.appendChild(editWindow);
+
+                        let points = data.points ? [...data.points] : [];
+                        if (!routeMarkers[name]) routeMarkers[name] = [];
+                        let markers = routeMarkers[name];
+
+                        let isAddingPoints = false;
+                        let clickHandler;
+
+                        addPointButton.addEventListener('click', function () {
+                            if (!isAddingPoints) {
+                                isAddingPoints = true;
+                                map.getCanvas().style.cursor = 'crosshair';
+
+                                clickHandler = function (e) {
+                                    const marker = new mapboxgl.Marker({ draggable: true })
+                                        .setLngLat(e.lngLat)
+                                        .addTo(map);
+
+                                    marker.on('dragend', function () {
+                                        const newLngLat = marker.getLngLat();
+                                        const index = markers.indexOf(marker);
+                                        if (index !== -1) {
+                                            points[index] = [newLngLat.lng, newLngLat.lat];
+                                            if (map.getSource(routeSourceId)) {
+                                                const lineData = map.getSource(routeSourceId)._data;
+                                                lineData.geometry.coordinates = points;
+                                                map.getSource(routeSourceId).setData(lineData);
+                                            }
+                                            // Update allRoutesData and persist
+                                            allRoutesData[name] = {
+                                                points,
+                                                color: map.getPaintProperty(`routeLine-${name}`, 'line-color') || '#888'
+                                            };
+                                            localStorage.setItem('routesData', JSON.stringify(allRoutesData));
+                                        }
+                                    });
+
+                                    routeMarkers[name].push(marker);
+                                    markers = routeMarkers[name];
+
+                                    const newPoint = [e.lngLat.lng, e.lngLat.lat];
+                                    if (points.length > 0) {
+                                        const data = map.getSource(routeSourceId)._data;
+                                        data.geometry.coordinates.push(newPoint);
+                                        map.getSource(routeSourceId).setData(data);
+                                    } else {
+                                        const data = map.getSource(routeSourceId)._data;
+                                        data.geometry.coordinates = [newPoint];
+                                        map.getSource(routeSourceId).setData(data);
+                                    }
+                                    points.push(newPoint);
+                                    // Update allRoutesData and persist
+                                    allRoutesData[name] = {
+                                        points,
+                                        color: map.getPaintProperty(`routeLine-${name}`, 'line-color') || '#888'
+                                    };
+                                    localStorage.setItem('routesData', JSON.stringify(allRoutesData));
+                                };
+
+                                map.on('click', clickHandler);
+                            }
+                        });
+
+                        doneButton.addEventListener('click', function () {
+                            if (isAddingPoints) {
+                                isAddingPoints = false;
+                                map.getCanvas().style.cursor = '';
+                                map.off('click', clickHandler);
+                            }
+                            if (editWindow) {
+                                editWindow.remove();
+                            }
+                            isEditMode = false;
+                            markers.forEach(marker => marker.setDraggable(false));
+                            if (routeMarkers[name]) {
+                                routeMarkers[name].forEach(m => m.getElement().style.display = 'none');
+                            }
+                            currentEditingRoute = null;
+                        });
+                    }
+                    isEditMode = true;
+                    if (typeof markers !== 'undefined') {
+                        markers.forEach(marker => marker.setDraggable(true));
+                    }
+                });
+            });
         });
     </script>
 
