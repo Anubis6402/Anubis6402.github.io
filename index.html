@@ -42,29 +42,49 @@
 </head>
 
 <body>
-    <button id="menuToggle"
-        style="position: absolute; top: 10px; left: 10px; z-index: 1; padding: 12px 16px; font-size: 18px;">☰</button>
 
     <div id="sidePanel" style="
         position: fixed;
         top: 0;
-        left: -100%;
-        width: 300px;
+        left: 0;
+        width: 320px;
         height: 100%;
-        background-color: white;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.2);
-        transition: left 0.3s ease;
-        z-index: 2;
-        padding: 20px;
+        background: linear-gradient(to bottom right, #f9f9f9, #eaeaea);
+        box-shadow: 3px 0 12px rgba(0, 0, 0, 0.15);
+        padding: 24px 20px;
         box-sizing: border-box;
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 16px;
+        border-right: 1px solid #ddd;
+        font-family: 'Segoe UI', sans-serif;
+        z-index: 2;
     ">
-        <button id="closePanel" style="position: absolute; top: 10px; right: 10px;">✕</button>
-        <button id="manageRoutes" style="display: block; margin-bottom: 10px;">Add Route</button>
+        <img src="images/st_logo.png" alt="Missouri S&T Logo" style="
+            width: 160px;
+            align-self: center;
+            margin-bottom: 10px;
+        ">
+        <button id="manageRoutes" style="
+            padding: 10px 16px;
+            background-color: #007a33;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        ">Add Route</button>
         <!-- Add more panel content here -->
     </div>
+    <script>
+        document.getElementById('manageRoutes').addEventListener('mouseenter', function () {
+            this.style.backgroundColor = '#005f28';
+        });
+        document.getElementById('manageRoutes').addEventListener('mouseleave', function () {
+            this.style.backgroundColor = '#007a33';
+        });
+    </script>
 
     <div id="map"></div>
     <script>
@@ -81,18 +101,15 @@
         // Store per-route markers
         const routeMarkers = {};
 
-        document.getElementById('menuToggle').addEventListener('click', function () {
-            const panel = document.getElementById('sidePanel');
-            if (panel.style.left === '0px') {
-                panel.style.left = '-100%';
-            } else {
-                panel.style.left = '0px';
-            }
-        });
+        // document.getElementById('menuToggle').addEventListener('click', function () {
+        //     const panel = document.getElementById('sidePanel');
+        //     if (panel.style.left === '0px') {
+        //         panel.style.left = '-100%';
+        //     } else {
+        //         panel.style.left = '0px';
+        //     }
+        // });
 
-        document.getElementById('closePanel').addEventListener('click', function () {
-            document.getElementById('sidePanel').style.left = '-100%';
-        });
 
         document.getElementById('manageRoutes').addEventListener('click', function () {
             const routeName = prompt("Enter the route name:");
@@ -107,22 +124,48 @@
                 });
 
                 const routeItem = document.createElement('div');
-                routeItem.style.display = 'flex';
-                routeItem.style.justifyContent = 'space-between';
-                routeItem.style.alignItems = 'center';
-                routeItem.style.marginTop = '10px';
+                routeItem.style.cssText = `
+                    background: #f0f0f0;
+                    border-radius: 10px;
+                    padding: 12px 16px;
+                    margin-top: 10px;
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-family: 'Segoe UI', sans-serif;
+                `;
 
                 const nameSpan = document.createElement('span');
                 nameSpan.textContent = routeName;
+                nameSpan.style.fontWeight = '600';
+                nameSpan.style.color = '#007a33';
+                nameSpan.style.fontSize = '16px';
 
                 const buttonGroup = document.createElement('div');
 
                 const editButton = document.createElement('button');
                 editButton.textContent = 'Edit';
-                editButton.style.marginRight = '5px';
+                editButton.style.cssText = `
+                    padding: 6px 12px;
+                    margin-right: 8px;
+                    border: 1px solid #ccc;
+                    border-radius: 6px;
+                    background: white;
+                    cursor: pointer;
+                    font-size: 14px;
+                `;
 
                 const deleteButton = document.createElement('button');
                 deleteButton.textContent = 'Delete';
+                deleteButton.style.cssText = `
+                    padding: 6px 12px;
+                    border: 1px solid #ccc;
+                    border-radius: 6px;
+                    background: white;
+                    cursor: pointer;
+                    font-size: 14px;
+                `;
 
                 deleteButton.addEventListener('click', function () {
                     if (confirm(`Are you sure you want to delete the route "${routeName}"?`)) {
@@ -447,22 +490,48 @@
 
                     // Recreate route list UI
                     const routeItem = document.createElement('div');
-                    routeItem.style.display = 'flex';
-                    routeItem.style.justifyContent = 'space-between';
-                    routeItem.style.alignItems = 'center';
-                    routeItem.style.marginTop = '10px';
+                    routeItem.style.cssText = `
+                        background: #f0f0f0;
+                        border-radius: 10px;
+                        padding: 12px 16px;
+                        margin-top: 10px;
+                        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        font-family: 'Segoe UI', sans-serif;
+                    `;
 
                     const nameSpan = document.createElement('span');
                     nameSpan.textContent = name;
+                    nameSpan.style.fontWeight = '600';
+                    nameSpan.style.color = '#007a33';
+                    nameSpan.style.fontSize = '16px';
 
                     const buttonGroup = document.createElement('div');
 
                     const editButton = document.createElement('button');
                     editButton.textContent = 'Edit';
-                    editButton.style.marginRight = '5px';
+                    editButton.style.cssText = `
+                        padding: 6px 12px;
+                        margin-right: 8px;
+                        border: 1px solid #ccc;
+                        border-radius: 6px;
+                        background: white;
+                        cursor: pointer;
+                        font-size: 14px;
+                    `;
 
                     const deleteButton = document.createElement('button');
                     deleteButton.textContent = 'Delete';
+                    deleteButton.style.cssText = `
+                        padding: 6px 12px;
+                        border: 1px solid #ccc;
+                        border-radius: 6px;
+                        background: white;
+                        cursor: pointer;
+                        font-size: 14px;
+                    `;
 
                     deleteButton.addEventListener('click', function () {
                         if (confirm(`Are you sure you want to delete the route "${name}"?`)) {
